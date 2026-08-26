@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Ethics Chat</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --accent:#6c8cff; --user:#2a3a6b;
+    --text:#e8eaf0; --muted:#9aa0ad; --border:#262b36;
+  }
+  *{box-sizing:border-box;font-family:system-ui,Segoe UI,Roboto,sans-serif}
+  body{margin:0;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
+  header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .tag{font-size:11px;color:var(--muted)}
+  select,button,input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px}
+  #model{margin-left:auto}
+  #log{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:780px;width:fit-content;padding:12px 14px;border-radius:12px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+  .user{align-self:flex-end;background:var(--user)}
+  .bot{align-self:flex-start;background:var(--panel);border:1px solid var(--border)}
+  .label{font-size:11px;color:var(--muted);margin-bottom:4px;display:inline-block;padding:2px 8px;border-radius:20px;border:1px solid var(--border)}
+  .label.gemini{color:#9ad; border-color:#2a4a7a;background:#13243d}
+  .label.groq{color:#f6b; border-color:#5a2a4a;background:#2d1323}
+  #bar{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:flex-end}
+  #input{flex:1;resize:none;height:44px;padding:11px 12px}
+  #send{cursor:pointer;background:var(--accent);border:none;font-weight:600}
+  #send:disabled{opacity:.5;cursor:default}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Ethics Chat</h1>
+  <span class="tag">Ask about bias, privacy, jobs &amp; responsible AI</span>
+  <select id="model">
+    <option value="gemini">Google Gemini (free)</option>
+    <option value="groq">Groq (free)</option>
+  </select>
+</header>
+
+<div id="log"></div>
+
+<div id="bar">
+  <textarea id="input" placeholder="Message the AI..."></textarea>
+  <button id="send">Send</button>
+</div>
+
+<script>
+const SYSTEM = `You are an AI assistant focused on the ETHICAL CHALLENGES OF ARTIFICIAL INTELLIGENCE IN EVERYDAY LIFE.
+You help users think critically about AI ethics. Grounded in this article's themes, always be ready to discuss:
+- Bias: AI learns human prejudice from data (e.g. hiring, facial recognition failing on minorities).
+- Privacy: AI profiles us from searches/likes; risks if data leaks or is misused.
+- High-stakes decisions: AI in hospitals/banks can err; machines lack human judgment/emotion.
+- Automation & jobs: repetitive work displaced; widening inequality without retraining.
+Be balanced: AI also helps healthcare and connection. Emphasize responsible, transparent, fair use and that users should stay informed.
+Keep replies clear, conversational, and concise (like a friendly guide).`;
+
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+const modelSel = document.getElementById("model");
+
+function addMsg(role, text, agent){
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + (role === "user" ? "user" : "bot");
+  const label = document.createElement("div");
+  if(role === "user"){
+    label.className = "label";
+    label.textContent = "You";
+  }else{
+    label.className = "label " + (agent === "gemini" ? "gemini" : "groq");
+    label.textContent = (agent === "gemini" ? "🤖 Gemini Agent" : "🤖 Groq Agent") + " is replying";
+  }
+  const body = document.createElement("div");
+  body.textContent = text;
+  wrap.appendChild(label); wrap.appendChild(body);
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+  return body;
+}
+
+async function ask(model, history){
+  const res = await fetch("/api/chat", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ model, history })
+  });
+  const data = await res.json();
+  if(data.error) throw new Error(data.error);
+  return data.reply;
+}
+
+const history = [];
+
+async function sendMsg(){
+  const text = input.value.trim();
+  if(!text) return;
+  const model = modelSel.value;
+  input.value = "";
+  addMsg("user", text);
+  history.push({ role:"user", text });
+  send.disabled = true;
+  const botEl = addMsg("bot", "…", model);
+  try{
+    const reply = await ask(model, history);
+    botEl.textContent = reply;
+    history.push({ role:"assistant", text: reply });
+  }catch(e){
+    botEl.textContent = "Error: " + e.message;
+  }finally{
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+send.addEventListener("click", sendMsg);
+input.addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMsg(); }
+});
+</script>
+</body>
+</html>
